@@ -14,8 +14,8 @@ if uploaded_file:
     st.subheader("元データ")
     st.dataframe(df)
 
-    # ラベル列を作成
-    df["ラベル"] = df["作業位置"] + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "分"
+    # ラベル列を作成（IDも含める）
+    df["ラベル"] = "ID:" + df["ID"] + " | " + df["作業位置"] + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "分"
 
     # グラフ作成
     fig = px.bar(
@@ -43,7 +43,7 @@ if uploaded_file:
         st.success(f"{len(selected_ids)} 件の作業を工程 {target_process} に移動しました。")
 
         # ラベル更新
-        df["ラベル"] = df["作業位置"] + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "分"
+        df["ラベル"] = "ID:" + df["ID"] + " | " + df["作業位置"] + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "分"
 
         fig_updated = px.bar(
             df,
