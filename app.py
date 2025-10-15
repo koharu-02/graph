@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.title("工程編成検討ツール（複数工程一括移動対応）")
+st.title("工程編成検討ツール（要素作業ごと複数工程一括移動対応）")
 
 uploaded_file = st.file_uploader("Excelファイルをアップロードしてください（工程, 作業位置, 要素作業, 時間）", type=["xlsx"])
 
@@ -31,19 +31,21 @@ if uploaded_file:
     fig.update_layout(barmode="stack", xaxis_title="工程", yaxis_title="時間")
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("複数工程の一括移動設定")
+    st.subheader("要素作業ごとの複数工程一括移動設定")
     move_count = st.number_input("移動ペア数を入力してください", min_value=1, max_value=10, value=2)
 
     move_pairs = []
     for i in range(move_count):
         st.write(f"移動ペア {i+1}")
+        element = st.selectbox(f"要素作業 {i+1}", options=sorted(df["要素作業"].unique()), key=f"element_{i}")
         from_process = st.selectbox(f"移動元工程 {i+1}", options=sorted(df["工程"].unique()), key=f"from_{i}")
         to_process = st.selectbox(f"移動先工程 {i+1}", options=sorted(df["工程"].unique()), key=f"to_{i}")
-        move_pairs.append((from_process, to_process))
+        move_pairs.append((element, from_process, to_process))
 
     if st.button("✅ 一括移動実行"):
-        for from_process, to_process in move_pairs:
-            df.loc[df["工程"] == from_process, "工程"] = to_process
+        for element, from_process, to_process in move_pairs:
+            mask = (df["工程"] == from_process) & (df["要素作業"] == element)
+            df.loc[mask, "工程"] = to_process
 
         st.success(f"{len(move_pairs)} ペアの移動を実行しました。")
 
