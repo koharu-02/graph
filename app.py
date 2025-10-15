@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.title("工程編成検討ツール")
+st.title("工程編成検討ツール（複数工程一括移動対応）")
 
 uploaded_file = st.file_uploader("Excelファイルをアップロードしてください（工程, 作業位置, 要素作業, 時間）", type=["xlsx"])
 
@@ -14,10 +14,10 @@ if uploaded_file:
     st.subheader("元データ")
     st.dataframe(df)
 
-    # ラベル列を作成（IDも含める）
+    # ラベル列（ID含む）
     df["ラベル"] = "ID:" + df["ID"] + " | " + df["作業位置"] + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "分"
 
-    # グラフ作成
+    # 初期グラフ
     fig = px.bar(
         df,
         x="工程",
@@ -27,24 +27,30 @@ if uploaded_file:
         hover_data=["ID", "作業位置", "要素作業", "時間"],
         title="工程別作業時間（積み上げ棒グラフ）"
     )
-
-    # 黒枠線を追加
     fig.update_traces(marker=dict(line=dict(color="black", width=1)))
-
     fig.update_layout(barmode="stack", xaxis_title="工程", yaxis_title="時間")
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("作業の移動")
-    selected_ids = st.multiselect("移動する作業IDを選択してください", options=df["ID"])
-    target_process = st.selectbox("移動先の工程を選択してください", options=sorted(df["工程"].unique()))
+    st.subheader("複数工程の一括移動設定")
+    move_count = st.number_input("移動ペア数を入力してください", min_value=1, max_value=10, value=2)
 
-    if st.button("✅ 移動実行"):
-        df.loc[df["ID"].isin(selected_ids), "工程"] = target_process
-        st.success(f"{len(selected_ids)} 件の作業を工程 {target_process} に移動しました。")
+    move_pairs = []
+    for i in range(move_count):
+        st.write(f"移動ペア {i+1}")
+        from_process = st.selectbox(f"移動元工程 {i+1}", options=sorted(df["工程"].unique()), key=f"from_{i}")
+        to_process = st.selectbox(f"移動先工程 {i+1}", options=sorted(df["工程"].unique()), key=f"to_{i}")
+        move_pairs.append((from_process, to_process))
+
+    if st.button("✅ 一括移動実行"):
+        for from_process, to_process in move_pairs:
+            df.loc[df["工程"] == from_process, "工程"] = to_process
+
+        st.success(f"{len(move_pairs)} ペアの移動を実行しました。")
 
         # ラベル更新
         df["ラベル"] = "ID:" + df["ID"] + " | " + df["作業位置"] + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "分"
 
+        # 更新後グラフ
         fig_updated = px.bar(
             df,
             x="工程",
