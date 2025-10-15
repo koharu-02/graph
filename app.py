@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-st.title("工程編成検討ツール（要素作業ごと複数工程一括移動対応）")
+st.title("工程編成検討ツール（IDごとに移動先指定）")
 
 uploaded_file = st.file_uploader("Excelファイルをアップロードしてください（工程, 作業位置, 要素作業, 時間）", type=["xlsx"])
 
@@ -31,23 +31,23 @@ if uploaded_file:
     fig.update_layout(barmode="stack", xaxis_title="工程", yaxis_title="時間")
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("要素作業ごとの複数工程一括移動設定")
-    move_count = st.number_input("移動ペア数を入力してください", min_value=1, max_value=10, value=2)
+    st.subheader("IDごとに移動先工程を指定")
+    selected_ids = st.multiselect("移動したいIDを選択してください", options=df["ID"])
 
-    move_pairs = []
-    for i in range(move_count):
-        st.write(f"移動ペア {i+1}")
-        element = st.selectbox(f"要素作業 {i+1}", options=sorted(df["要素作業"].unique()), key=f"element_{i}")
-        from_process = st.selectbox(f"移動元工程 {i+1}", options=sorted(df["工程"].unique()), key=f"from_{i}")
-        to_process = st.selectbox(f"移動先工程 {i+1}", options=sorted(df["工程"].unique()), key=f"to_{i}")
-        move_pairs.append((element, from_process, to_process))
+    move_targets = {}
+    for id_ in selected_ids:
+        current_process = df.loc[df["ID"] == id_, "工程"].values[0]
+        move_targets[id_] = st.selectbox(
+            f"ID:{id_}（現在：{current_process}）の移動先工程",
+            options=[x for x in sorted(df["工程"].unique()) if x != current_process],
+            key=f"move_{id_}"
+        )
 
     if st.button("✅ 一括移動実行"):
-        for element, from_process, to_process in move_pairs:
-            mask = (df["工程"] == from_process) & (df["要素作業"] == element)
-            df.loc[mask, "工程"] = to_process
+        for id_, to_process in move_targets.items():
+            df.loc[df["ID"] == id_, "工程"] = to_process
 
-        st.success(f"{len(move_pairs)} ペアの移動を実行しました。")
+        st.success(f"{len(move_targets)} 件のIDの移動を実行しました。")
 
         # ラベル更新
         df["ラベル"] = "ID:" + df["ID"] + " | " + df["作業位置"] + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "分"
