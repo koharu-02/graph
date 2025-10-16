@@ -15,7 +15,7 @@ if uploaded_file:
     st.dataframe(df)
 
     # ラベル列（ID含む）
-    df["ラベル"] = "ID:" + df["ID"] + " | " + df["作業位置"] + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "分"
+    df["ラベル"] = "ID:" + df["ID"] + " | " + df["作業位置"] + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "秒"
 
     # 初期グラフ
     fig = px.bar(
