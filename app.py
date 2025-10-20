@@ -9,14 +9,32 @@ uploaded_file = st.file_uploader("Excelファイルをアップロードして�
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file, engine="openpyxl")
-    if 'ID' not in df.columns:
-        df['ID'] = df.index.astype(str)
+
+    # ID割り振り（歩行は下の行と工程が同じなら同じID）
+    ids = []
+    current_id = 1
+    n = len(df)
+    for i in reversed(range(n)):
+        if df.loc[i, "要素作業"] == "歩行":
+            if i + 1 < n and df.loc[i, "工程"] == df.loc[i + 1, "工程"]:
+                ids.append(None)  # 後で下のIDをコピー
+            else:
+                ids.append(current_id)
+                current_id += 1
+        else:
+            ids.append(current_id)
+            current_id += 1
+    ids = ids[::-1]
+    for i in range(n):
+        if ids[i] is None:
+            ids[i] = ids[i + 1]
+    df["ID"] = ids
 
     st.subheader("元データ")
     st.dataframe(df)
 
     # ラベル列（ID含む）＋ 作業位置がない場合は「なし」と表示
-    df["ラベル"] = "ID:" + df["ID"] + " | " + df["作業位置"].fillna("なし") + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "秒"
+    df["ラベル"] = "ID:" + df["ID"].astype(str) + " | " + df["作業位置"].fillna("なし") + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "秒"
 
     # 色分けカテゴリ：作業位置があればそれを、なければ要素作業を使う
     df["色分けカテゴリ"] = df["作業位置"].where(df["作業位置"].notna(), df["要素作業"])
@@ -43,7 +61,7 @@ if uploaded_file:
     st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("IDごとに移動先工程を指定")
-    selected_ids = st.multiselect("移動したいIDを選択してください", options=df["ID"])
+    selected_ids = st.multiselect("移動したいIDを選択してください", options=df["ID"].unique())
 
     move_targets = {}
     for id_ in selected_ids:
@@ -61,7 +79,7 @@ if uploaded_file:
         st.success(f"{len(move_targets)} 件のIDの移動を実行しました。")
 
         # ラベルと色分けカテゴリを再計算
-        df["ラベル"] = "ID:" + df["ID"] + " | " + df["作業位置"].fillna("なし") + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "秒"
+        df["ラベル"] = "ID:" + df["ID"].astype(str) + " | " + df["作業位置"].fillna("なし") + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "秒"
         df["色分けカテゴリ"] = df["作業位置"].where(df["作業位置"].notna(), df["要素作業"])
 
         # 更新後グラフ
@@ -86,5 +104,6 @@ if uploaded_file:
         st.plotly_chart(fig_updated, use_container_width=True)
 
         updated_filename = "updated_process_plan.xlsx"
-        df.drop(columns=["ID", "色分けカテゴリ"]).to_excel(updated_filename, index=False)
-       
+        df.drop(columns=["色分けカテゴリ"]).to_excel(updated_filename, index=False)
+        with open(updated_filename, "rb") as f:
+            st.download_button("📥 更新後のExcelファイルをダウンロード", f, file_name=updated_filename)
