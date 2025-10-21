@@ -17,7 +17,7 @@ if uploaded_file:
     for i in reversed(range(n)):
         if df.loc[i, "要素作業"] == "歩行":
             if i + 1 < n and df.loc[i, "工程"] == df.loc[i + 1, "工程"]:
-                ids.append(None)  # 後で下のIDをコピー
+                ids.append(None)
             else:
                 ids.append(current_id)
                 current_id += 1
@@ -60,17 +60,26 @@ if uploaded_file:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("IDごとに移動先工程を指定")
-    selected_ids = st.multiselect("移動したいIDを選択してください", options=df["ID"].unique())
+    st.subheader("IDごとに移動先工程を指定（直接入力）")
+    id_input = st.text_input("移動したいIDをカンマ区切りで入力してください（例: 1,2,5）")
+
+    try:
+        selected_ids = [int(x.strip()) for x in id_input.split(",") if x.strip()]
+    except ValueError:
+        st.error("IDは数値で入力してください。")
+        selected_ids = []
 
     move_targets = {}
     for id_ in selected_ids:
-        current_process = df.loc[df["ID"] == id_, "工程"].values[0]
-        move_targets[id_] = st.selectbox(
-            f"ID:{id_}（現在：{current_process}）の移動先工程",
-            options=[x for x in sorted(df["工程"].unique()) if x != current_process],
-            key=f"move_{id_}"
-        )
+        if id_ in df["ID"].values:
+            current_process = df.loc[df["ID"] == id_, "工程"].values[0]
+            move_targets[id_] = st.selectbox(
+                f"ID:{id_}（現在：{current_process}）の移動先工程",
+                options=[x for x in sorted(df["工程"].unique()) if x != current_process],
+                key=f"move_{id_}"
+            )
+        else:
+            st.warning(f"ID:{id_} はデータに存在しません。")
 
     if st.button("✅ 一括移動実行"):
         for id_, to_process in move_targets.items():
