@@ -1,16 +1,54 @@
 import streamlit as st
 import pandas as pd
+import openpyxl
+from io import BytesIO
 import plotly.express as px
 
 st.set_page_config(layout="wide")
-st.title("工程編成検討ツール（IDごとに移動先指定）")
+st.title("要素作業リスト生成＆工程編成検討ツール")
 
-uploaded_file = st.file_uploader("Excelファイルをアップロードしてください（工程, 作業位置, 要素作業, 時間）", type=["xlsx"])
+uploaded_file = st.file_uploader("Excelファイルをアップロードしてください", type=["xlsx"])
+
+def to_number(val):
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0
 
 if uploaded_file:
-    df = pd.read_excel(uploaded_file, engine="openpyxl")
+    wb = openpyxl.load_workbook(uploaded_file, data_only=True)
+    output = []
 
-    # ID割り振り（歩行は下の行と工程が同じなら同じID）
+    for sheet in wb.sheetnames:
+        ws = wb[sheet]
+        process = ws["D2"].value if ws["D2"].value else ""
+        last_foot_pos = ""
+
+        for i in range(6, 53):
+            task = ws[f"B{i}"].value if ws[f"B{i}"].value else ""
+            foot_pos = ws[f"Q{i}"].value if ws[f"Q{i}"].value else ""
+            walk_time = ws[f"Q{i+1}"].value if ws[f"Q{i+1}"].value else ""
+            task_time = ws[f"AB{i}"].value if ws[f"AB{i}"].value else ""
+
+            if not task:
+                continue
+
+            if foot_pos:
+                last_foot_pos = foot_pos
+            else:
+                foot_pos = last_foot_pos
+
+            if to_number(walk_time) > 0:
+                output.append({"工程": process, "作業位置": "", "要素作業": "歩行", "時間": to_number(walk_time)})
+                output.append({"工程": process, "作業位置": foot_pos, "要素作業": task,
+                               "時間": max(to_number(task_time) - to_number(walk_time), 0)})
+            else:
+                output.append({"工程": process, "作業位置": foot_pos, "要素作業": task, "時間": to_number(task_time)})
+
+    df_original = pd.DataFrame(output)
+
+    # ID割り振り
+    df = df_original.copy()
     ids = []
     current_id = 1
     n = len(df)
@@ -30,16 +68,12 @@ if uploaded_file:
             ids[i] = ids[i + 1]
     df["ID"] = ids
 
-    st.subheader("元データ")
+    st.subheader("元データ（ID割り振り済）")
     st.dataframe(df)
 
-    # ラベル列（ID含む）＋ 作業位置がない場合は「なし」と表示
     df["ラベル"] = "ID:" + df["ID"].astype(str) + " | " + df["作業位置"].fillna("なし") + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "秒"
-
-    # 色分けカテゴリ：作業位置があればそれを、なければ要素作業を使う
     df["色分けカテゴリ"] = df["作業位置"].where(df["作業位置"].notna(), df["要素作業"])
 
-    # 初期グラフ
     fig = px.bar(
         df,
         x="工程",
@@ -87,11 +121,9 @@ if uploaded_file:
 
         st.success(f"{len(move_targets)} 件のIDの移動を実行しました。")
 
-        # ラベルと色分けカテゴリを再計算
         df["ラベル"] = "ID:" + df["ID"].astype(str) + " | " + df["作業位置"].fillna("なし") + " | " + df["要素作業"] + " | " + df["時間"].astype(str) + "秒"
         df["色分けカテゴリ"] = df["作業位置"].where(df["作業位置"].notna(), df["要素作業"])
 
-        # 更新後グラフ
         fig_updated = px.bar(
             df,
             x="工程",
@@ -112,7 +144,12 @@ if uploaded_file:
         )
         st.plotly_chart(fig_updated, use_container_width=True)
 
-        updated_filename = "updated_process_plan.xlsx"
-        df.drop(columns=["色分けカテゴリ"]).to_excel(updated_filename, index=False)
-        with open(updated_filename, "rb") as f:
-            st.download_button("📥 更新後のExcelファイルをダウンロード", f, file_name=updated_filename)
+    # Excelファイルをメモリ上に作成（元データと更新後データの両方を含む）
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df_original.to_excel(writer, sheet_name="元データ", index=False)
+        df.drop(columns=["色分けカテゴリ"]).to_excel(writer, sheet_name="更新後データ", index=False)
+    buffer.seek(0)
+
+    st.download_button("📥 Excelファイルをダウンロード（元データ＋更新後データ）", buffer, file_name="process_plan_combined.xlsx")
+``
